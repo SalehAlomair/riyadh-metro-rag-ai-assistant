@@ -81,7 +81,7 @@ Gradio demonstration interface
 ### 1. Clone the repository
 
 ```bash
-git clone (https://github.com/SalehAlomair/riyadh-metro-rag-ai-assistant)
+git clone https://github.com/SalehAlomair/riyadh-metro-rag-ai-assistant
 cd riyadh-metro-rag-ai-assistant
 ```
 
