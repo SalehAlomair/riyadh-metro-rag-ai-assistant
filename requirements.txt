@@ -1,0 +1,18 @@
+# Core data processing
+numpy>=1.26,<3.0
+pandas>=2.2,<3.0
+
+# Vector search and embeddings
+faiss-cpu>=1.8,<2.0
+sentence-transformers>=3.0,<6.0
+
+# AWS Bedrock runtime integration
+boto3>=1.34,<2.0
+botocore>=1.34,<2.0
+
+# Application interface
+gradio>=4.44,<6.0
+
+# Notebook execution environment
+ipykernel>=6.29,<8.0
+jupyter>=1.1,<2.0
