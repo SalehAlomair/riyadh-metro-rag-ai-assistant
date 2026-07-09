@@ -4,3 +4,4 @@ __pycache__/
 .DS_Store
 .env
 your_downloaded_file.json
+.vscode/settings.json
