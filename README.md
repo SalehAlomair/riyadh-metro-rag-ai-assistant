@@ -59,15 +59,12 @@ Gradio demonstration interface
 ```text
 .
 ├── README.md
-├── riyadh_metro_rag_enterprise.ipynb
+├── metro_rag.ipynb
 ├── requirements.txt
-├── Dockerfile
 ├── .env.example
 └── data/
     └── metro-stations-in-riyadh-by-metro-line-and-station-type-2024.json
 ```
-
-The dataset file is expected in the project root by default. For a cleaner repository layout, place it under `data/` and update `CONFIG.dataset_path` in the notebook.
 
 ## Technical Stack
 
@@ -84,8 +81,8 @@ The dataset file is expected in the project root by default. For a cleaner repos
 ### 1. Clone the repository
 
 ```bash
-git clone <repository-url>
-cd riyadh-metro-rag-assistant
+git clone (https://github.com/SalehAlomair/riyadh-metro-rag-ai-assistant)
+cd riyadh-metro-rag-ai-assistant
 ```
 
 ### 2. Create a virtual environment
@@ -133,38 +130,6 @@ jupyter lab riyadh_metro_rag_enterprise.ipynb
 ```
 
 Run the cells sequentially after placing the dataset file in the configured path.
-
-## Docker Deployment
-
-Build the container:
-
-```bash
-docker build -t riyadh-metro-rag .
-```
-
-Run the container with local AWS credentials mounted:
-
-```bash
-docker run --rm -p 7860:7860 \
-  -e AWS_REGION=us-east-1 \
-  -e BEDROCK_MODEL_ID=us.anthropic.claude-haiku-4-5-20251001-v1:0 \
-  -v ~/.aws:/root/.aws:ro \
-  -v $(pwd)/data:/app/data:ro \
-  riyadh-metro-rag
-```
-
-For GPU-enabled environments, use an NVIDIA container runtime and install compatible CUDA-enabled PyTorch and FAISS builds. The CPU configuration is sufficient for small to medium station datasets, while GPU acceleration is recommended for large-scale document expansion, batch embedding jobs, or frequent index rebuilds.
-
-## GPU Acceleration Notes
-
-The main GPU benefit in this project is embedding generation. FAISS CPU search is already efficient for a compact station dataset, but larger deployments can benefit from GPU indexing and batch embedding.
-
-Recommended production approach:
-
-1. Build embeddings in controlled offline jobs.
-2. Persist the generated FAISS index and metadata table.
-3. Load the prebuilt index at application startup.
-4. Reserve GPU usage for large rebuilds, not for every user request unless query volume requires it.
 
 ## Key Results and Robustness
 
