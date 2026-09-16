@@ -1,12 +1,12 @@
 # Riyadh Metro RAG Assistant
 
-Tags: Python, Retrieval-Augmented Generation, FAISS, SentenceTransformers, Amazon Bedrock, Gradio, Multilingual NLP, Arabic NLP, Enterprise AI, Public Transport Analytics
+Tags: Python, Retrieval-Augmented Generation, FAISS, SentenceTransformers, Amazon Bedrock, Gradio, GeoPandas, Geospatial Enrichment, Multilingual NLP, Arabic NLP, Enterprise AI, Public Transport Analytics
 
 ## Business Value and Problem Statement
 
-Public transport networks generate high-volume, repetitive information requests about station names, routes, station types, line assignments, and nearby stops. In a city-scale metro system, manual lookup processes increase response time, create inconsistencies across channels, and introduce operational risk when staff or applications provide answers from outdated or incomplete sources.
+Public transport networks generate high-volume, repetitive information requests about station names, routes, station types, line assignments, districts, and nearby stops. In a city-scale metro system, manual lookup processes increase response time, create inconsistencies across channels, and introduce operational risk when staff or applications provide answers from outdated or incomplete sources.
 
-The Riyadh Metro RAG Assistant addresses this problem by converting structured station data into a bilingual retrieval system. Instead of allowing a language model to answer from memory, the system retrieves station-specific evidence from a FAISS vector index and instructs the language model to answer only from that context.
+The Riyadh Metro RAG Assistant addresses this problem by converting structured station data, enriched with the Riyadh district each station lies in, into a bilingual retrieval system. Instead of allowing a language model to answer from memory, the system retrieves station-specific evidence from a FAISS vector index and instructs the language model to answer only from that context.
 
 This approach provides measurable business value in four areas:
 
@@ -18,16 +18,24 @@ This approach provides measurable business value in four areas:
 ## System Architecture and Workflow
 
 ```text
-Raw Riyadh Metro station data
+Raw Riyadh Metro station data            Riyadh district polygons (GeoJSON)
+        |                                          |
+        v                                          |
+JSON loader and flattening                         |
+        |                                          |
+        v                                          v
+Spatial join: station -> district (point-in-polygon, nearest-district fallback,
+bordering districts within 150 m)
         |
         v
-Dataset loader and schema validation
+Enrichment: position on line, neighbors, interchanges, former names
         |
         v
-Preprocessing and station sequence enrichment
-        |
-        v
-Bilingual station text chunks
+Bilingual knowledge base
+  - one chunk per station stop (94)
+  - line summaries with type counts (6) and line routes (6)
+  - district summaries (51)
+  - network overview (1)
         |
         v
 Multilingual E5 embedding model
@@ -39,7 +47,7 @@ Normalized vector embeddings
 FAISS inner-product index
         |
         v
-Top-k retrieved station context
+Top-k retrieved context (k = 5)
         |
         v
 Grounded prompt construction
@@ -59,22 +67,38 @@ Gradio demonstration interface
 ```text
 .
 ├── README.md
-├── metro_rag.ipynb
+├── app.py                  # Gradio interface (entry point)
+├── evaluate.py             # retrieval and end-to-end evaluation (entry point)
+├── metro_rag/
+│   ├── config.py           # paths, spatial join settings, model ids
+│   ├── data_processing.py  # load stations, district join, line context, station chunks
+│   ├── knowledge_base.py   # line, route, district and network summary chunks
+│   ├── retrieval.py        # E5 embeddings, FAISS index, top-k retrieval
+│   ├── llm.py              # Bedrock client, prompt and answer generation
+│   └── pipeline.py         # MetroRAG: builds everything once, exposes retrieve() and ask()
+├── metro_rag.ipynb         # original exploratory notebook
 ├── requirements.txt
-├── .env.example
 └── data/
-    └── metro-stations-in-riyadh-by-metro-line-and-station-type-2024.json
+    ├── metro-stations-in-riyadh-by-metro-line-and-station-type-2024.json
+    └── riyadh-districts.geojson   # Riyadh subset of the districts dataset, created on first run
 ```
+
+## Data Sources
+
+- **Metro stations:** `metro-stations-in-riyadh-by-metro-line-and-station-type-2024.json` (6 lines, 83 unique stations, 94 station-line stops, with coordinates).
+- **Districts:** [homaily/Saudi-Arabia-Regions-Cities-and-Districts](https://github.com/homaily/Saudi-Arabia-Regions-Cities-and-Districts) district polygons, filtered to Riyadh (`city_id = 3`, 189 districts). The notebook downloads the file once and caches the Riyadh subset in `data/`.
+
+Stations are matched to districts with a point-in-polygon join in a metric projection (UTM 38N). 89 of 94 stops fall inside a district polygon; the 5 remaining stops (PNU and airport terminals) are assigned the nearest district with the distance recorded, and their chunks state that they lie outside district boundaries. Many central stations sit on boundary roads, so districts within 150 m are also listed as bordering districts.
 
 ## Technical Stack
 
-- Python 3.11
+- Python 3.9+ (3.11 recommended)
 - pandas and NumPy for data processing
+- GeoPandas and Shapely for the station-to-district spatial join
 - SentenceTransformers for multilingual embeddings
 - FAISS for vector similarity search
 - Amazon Bedrock Runtime through boto3 for generation
 - Gradio for the demonstration user interface
-- Docker for reproducible deployment
 
 ## Installation Guide
 
@@ -123,24 +147,36 @@ Credentials can be configured through one of the following production-safe metho
 
 Do not commit AWS access keys to the repository.
 
-### 5. Run the notebook
+### 5. Run the app
 
 ```bash
-jupyter lab riyadh_metro_rag_enterprise.ipynb
+python app.py                  # Gradio interface
+python evaluate.py             # retrieval evaluation (no AWS needed)
+python evaluate.py --with-llm  # also run end-to-end questions through Bedrock
 ```
 
-Run the cells sequentially after placing the dataset file in the configured path.
+The notebook (`jupyter lab metro_rag.ipynb`) is kept for exploration. The first run needs internet access to download the embedding model and the districts GeoJSON; later runs use the local copies.
 
 ## Key Results and Robustness
 
-The notebook includes a retrieval evaluation suite with representative English and Arabic queries covering:
+The notebook includes a retrieval evaluation suite (section 3.1) with 12 English and Arabic questions, each labeled with the chunk(s) that contain the answer, covering:
 
 - Direct fact retrieval: station type and line assignment.
 - Relational retrieval: previous and next station questions.
-- Aggregation stress testing: station counts by line and station type.
-- Bilingual query behavior: Arabic and English user input.
+- District retrieval: which district a station is in, and which stations a district contains.
+- Aggregation: station counts by line, station type, and for the whole network.
+- Former station names (e.g. "Terminal 5" for Airport T5).
 
-No fabricated benchmark metrics are reported in this repository. Final precision, recall, latency, and answer-accuracy metrics should be generated after running the notebook against the approved production dataset and the enabled Bedrock model. This is the correct evaluation approach because retrieval metrics depend on the exact dataset version, station naming conventions, and approved ground-truth answers.
+Latest run (multilingual-e5-small, k = 5):
+
+| Metric | Result |
+| --- | --- |
+| Top-1 retrieval accuracy | 92% (11/12) |
+| Top-5 retrieval recall | 100% (12/12) |
+
+The suite is small and was used while designing the chunks, so treat these numbers as a regression check rather than a held-out benchmark. Section 3.2 runs six questions end to end through Bedrock, including an Arabic district question and a station outside district boundaries.
+
+Summary chunks fixed a failure of the earlier station-only index: "How many elevated stations are there on the Blue Line?" used to retrieve 3 arbitrary stations and answer "3"; it now retrieves the Blue line summary and answers 9.
 
 Recommended metrics for production validation:
 
@@ -156,9 +192,9 @@ Recommended metrics for production validation:
 The implementation is designed to handle the following operational edge cases:
 
 - Empty user questions are rejected before retrieval.
-- Missing dataset files raise explicit configuration errors.
-- Missing required columns raise schema validation errors.
-- AWS or Bedrock failures return a controlled service-availability message in the UI.
+- Stations outside every district polygon fall back to the nearest district and are labeled as such.
+- Interchange stations (same station code on several lines) list the other lines they serve.
+- AWS or Bedrock failures return a controlled service-availability message in the UI, with details logged instead of shown to users.
 - Unknown answers are constrained by the prompt to avoid unsupported generation.
 - Arabic and English queries are routed through the same multilingual retrieval pipeline.
 
@@ -176,6 +212,8 @@ Production deployments should follow these controls:
 ## Future Enhancements
 
 - Persist FAISS index artifacts to disk for faster startup.
+- Add schema validation for the station and district datasets.
+- Replace the open-source district polygons with official municipal boundaries when available.
 - Add cross-encoder reranking for higher precision on ambiguous station names.
 - Add hybrid search combining keyword filters and vector retrieval.
 - Implement deterministic handlers for analytics questions before LLM generation.

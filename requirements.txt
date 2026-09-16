@@ -2,6 +2,13 @@
 numpy>=1.26,<3.0
 pandas>=2.2,<3.0
 
+# Geospatial enrichment (station -> district)
+geopandas>=1.0,<2.0
+shapely>=2.0,<3.0
+pyproj>=3.6,<4.0
+pyogrio>=0.7,<1.0
+requests>=2.31,<3.0
+
 # Vector search and embeddings
 faiss-cpu>=1.8,<2.0
 sentence-transformers>=3.0,<6.0
